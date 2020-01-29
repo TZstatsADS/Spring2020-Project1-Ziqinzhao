@@ -7,7 +7,7 @@
 ### [Project Description](doc/)
 This is the first and only *individual* (as opposed to *team*) this semester. 
 
-Term: Spring 2020
+Term: Spring 2020hbhh
 
 + Projec title: Lorem ipsum dolor sit amet
 + This project is conducted by [your name]
