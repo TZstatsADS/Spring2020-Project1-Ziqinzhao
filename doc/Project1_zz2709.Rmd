@@ -1,0 +1,286 @@
+---
+title: "Project I: Data Story on Song Lyrics"
+author: "Ziqin Zhao"
+date: "2/1/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Introduction
+
+### What can we see from the lyrics in different songs?
+
+Music is closely related to people's lives. Every day, we can hear different kinds of songs on different occasions. When you hear a song, what comes to your mind？Do you feel about the melody or resonate with the lyrics? People always say, "sad songs release your sadness, quiet songs give you a place to relax, and inspirational songs help you rebuild your confidence." Many times, lyrics are a tool for musicians to express their personal feelings or sigh for their country. Therefore, lyrics are often accompanied by strong emotions.
+
+```{r,echo=FALSE, message=FALSE, warning=FALSE}
+library(textdata)
+library(tm)
+library(data.table)
+library(tidytext)
+library(tidyverse)
+library(DT)
+library(wordcloud)
+library(wordcloud2)
+library(reshape2)
+library(RColorBrewer)
+library(janeaustenr)
+library(stringr)
+library(ggplot2)
+library(ggrepel)
+library(syuzhet)
+library(lexicon)
+library(radarchart)
+library(igraph)
+library(ggraph)
+library(circlize)
+data(nrc_emotions)
+
+```
+
+### How about sentiments of lyrics in songs for different genres？
+
+In this part, binary sentiment analysis and NRC sentiment analysis will be analyzed in detail for eight different genres for songs.
+
+# Binary Sentiment Analysis
+
+We separate sentiment into two categories, which are positive sentiment and negative sentiment.
+I want to show the most recurring positive and negative words in lyrics among ten genres of songs. From the comparison word cloud shown below, the first plot is the top 200 positive word cloud among ten genres of songs. We can see that "love" is the most recurring positive words in all kinds of genres. At the same time, we can see that there are relatively few positive words in country, pop, and rock songs.
+
+```{r,echo=FALSE, message=FALSE, warning=FALSE}
+load("/Users/zhaoziqin/Desktop/Spring2020-Project1-Ziqinzhao/output/processed_lyrics.RData")
+artists <- read_csv("~/Desktop/Spring2020-Project1-Ziqinzhao/data/artists.csv")
+
+tidy_lyrics<-dt_lyrics%>%
+  unnest_tokens(word, stemmedwords) 
+
+# select 10 types of genres
+genre_type<-dt_lyrics%>%
+  group_by(genre)%>%
+  count()
+genre_name<-genre_type[,1]
+genre_name<-genre_name$genre[-8]
+genre_name_select<-genre_name[-8] 
+#genre_name_select
+
+nrc<-nrc_emotions%>%rename(word=term)
+
+# positive and negative sentiments 
+positive_sentiment<-get_sentiments("bing")%>%
+  filter(sentiment=="positive")
+
+positive_senti_for_genre_f<-function(x){
+  tidy_lyrics%>%
+    filter(genre==x)%>%
+    semi_join(positive_sentiment)%>%
+    count(word,sort=TRUE)%>%
+    mutate(genre=x)%>%
+    select(word,genre,n)
+}
+positive_senti_for_genre<-map(genre_name_select,positive_senti_for_genre_f)
+
+
+full_positive_senti<-reduce(positive_senti_for_genre,full_join)%>%
+  acast(word~genre, value.var="n",fill=0)%>%
+comparison.cloud(scale=c(2,0.5),max.words=200,random.order = FALSE,rot.per=.15,
+	use.r.layout=FALSE,title.size=1,title.colors="black")
+full_positive_senti
+
+```
+The following word cloud is the top 200 negative words in all kinds of genres. We can see hip-hop contains the most negative words.
+
+```{r,echo=FALSE, message=FALSE, warning=FALSE}
+# Negative 
+negative_sentiment<-get_sentiments("bing")%>%
+  filter(sentiment=="negative") 
+
+negative_senti_for_genre_f<-function(x){
+  tidy_lyrics%>%
+    filter(genre==x)%>%
+    semi_join(negative_sentiment)%>%
+    count(word,sort=TRUE)%>%
+    mutate(genre=x)%>%
+    select(word,genre,n)
+}
+negative_senti_for_genre<-map(genre_name_select,negative_senti_for_genre_f)
+
+
+full_negative_senti<-reduce(negative_senti_for_genre,full_join)%>%
+  acast(word~genre, value.var = "n",fill=0)%>%
+comparison.cloud(scale=c(2,0.5),max.words=200,random.order = FALSE,rot.per=.15,
+	use.r.layout=FALSE, title.size=1, title.colors = "black")
+full_negative_senti
+```
+
+Hip-hop music is a freedom style that has no heart and dares to despise everything. Therefore, hip-hop often expresses dissatisfaction with many events or types of people in society, which contain a lot of sentimental words in total. Through the cloud word plot, we can see that different genres have different sentimental words. Some of these words are expressions of the themes or are the representation of the entire tone of a song.
+
+# NRC Sentiment Analysis
+
+Next, I want to further subdivide the sentiments, and I want to compare sentiments in the ten genres. Here is the histogram to show the comparison in detail.
+
+```{r,echo=FALSE, message=FALSE, warning=FALSE}
+
+# 8 emotions for different genres 
+nrc<-nrc_emotions%>%rename(word=term)
+eight_senti_f<-function(x){
+  data<-tidy_lyrics%>%
+    filter(genre==x)%>%
+    semi_join(nrc)%>%
+    count(word,sort=TRUE)%>%
+    inner_join(nrc)%>%
+    pivot_longer(cols=-c("word","n"),
+               names_to = "Sentiments",values_to = "amount")%>%
+  select(Sentiments,amount)%>%
+  group_by(Sentiments)%>%mutate(n=sum(amount))%>%head(8)%>%select(Sentiments,n)
+  names(data)<-c("Sentiments",x)
+  return(data)
+}
+
+eight_senti_genre<-map(genre_name_select,eight_senti_f)
+
+
+merge_genres<-reduce(eight_senti_genre,full_join)
+merge_genres%>%
+  pivot_longer(-Sentiments,names_to = "genre", values_to = "n")%>%
+  ggplot(aes(Sentiments,n,fill = Sentiments)) +
+  geom_col() +
+  scale_fill_brewer(palette= "PuBu")+
+  theme(axis.text.x = element_blank())+
+  labs(x ="Sentiments", y ="Ten Different Genres",
+       title="Sentiment Analysis for Different Genres") +
+  coord_flip()+
+  facet_wrap(~genre)
+  
+```
+
+NRC sentiment divides sentiments into eight classifications, which are anger, anticipation, disgust, fear, joy, sadness, surprise and trust. From the above histogram, it clearly shows that trust and fear are the most recurring sentimental words in all kinds of genres. Sadness and anger are also used a lot. 
+
+### Radar Charts & Chord Diagram
+
+For a more detail comparison, I made radar charts and chord diagrams to show the same or different among the ten categories.
+The radar chart and chord diagram show below.
+
+From the radar chart, we can see the same trend in the sentiments of all the lyrics. "Fear" is the most recurring sentimental words in all genres. At the same time, Rock has more sentiments in total compared to other genres, and folk has less emotional words in total. 
+
+```{r,echo=FALSE, message=FALSE, warning=FALSE}
+# radarchart 
+Radar_for_genre<-merge_genres%>%
+  chartJSRadar(scaleStepWidth = 10,main="Sentiment Radar",
+               labelSize=12,lineAlpha=1,polyAlpha=0.2)
+Radar_for_genre
+
+
+matrix_genres<-matrix(as.numeric(as.matrix(merge_genres)[,-1]),ncol = 10,nrow = 8)
+rownames(matrix_genres)<-c("anger","anticipation","disgust","fear",
+                           "joy","sadness","surprise","trust")
+colnames(matrix_genres)<-genre_name_select
+
+
+```
+
+For the chord diagram, it is the relationship and interaction between eight sentiments and ten genres. All sentiments appear in each genre of songs. It clearly shows that the complexity and diversity of sentiments in lyrics. Through the scale value in the diagram, we can also see the frequency of different sentiments and which type of music contains the most emotions in total. 
+
+```{r,echo=FALSE, message=FALSE, warning=FALSE}
+set.seed(2020)
+chordDiagram(matrix_genres,big.gap = 10)
+```
+
+# Sentiment with Negating Words 
+
+How often sentimental words are preceded by negating words such as not, never and without?
+
+For example, if a positive word is preceded by "not", the sentiment of this word will be reversed. "good" and "not good" are reverse effect. The following histogram is created by the top 30 sentimental words which are preceded by negating words (never, no, not, without).
+All of them in the histogram has a reverse effect on sentiment in lyrics. 
+
+```{r,echo=FALSE, message=FALSE, warning=FALSE}
+# separate lyrrics into two words 
+lyrics_bigrams <- dt_lyrics %>%
+  unnest_tokens(bigram, lyrics, token = "ngrams", n = 2)%>%select(genre,bigram)
+
+
+# into two colunm
+lyrics_separated <- lyrics_bigrams %>%
+  separate(bigram, c("word1", "word2"), sep = " ")
+
+not<-lyrics_separated %>%
+  filter(word1 == "not") %>%
+  count(word1, word2, sort = TRUE)
+
+bing<- get_sentiments("bing")
+
+negative_words<-c("not", "no", "never", "without")
+negative_words_senti<-lyrics_separated%>%
+  filter(word1 %in% negative_words)%>%
+  inner_join(bing, by = c(word2 = "word")) %>%
+  count(word1, word2, sentiment, sort = TRUE)
+
+negative_words_senti%>%
+  head(30)%>%
+  mutate(n=ifelse(sentiment=="negative",-n,n)) %>%
+  mutate(word2=reorder(word2,n)) %>%
+  ggplot(aes(word2,n,fill=sentiment))+
+  geom_col() +
+  scale_fill_brewer(palette="Set1")+
+  facet_wrap(~word1,scales="free_y")+
+  coord_flip() +
+  labs(y = "Sentiment Amount",x="sentiments after negtive words")
+
+```
+
+Next, I made a negation network to see the more clear relationship between "not words" and sentiments. 
+Arrow represents the number of sentimental words. The darker the arrow, the greater the number of words.
+
+```{r,echo=FALSE, message=FALSE, warning=FALSE}
+graph1<-negative_words_senti%>%
+  filter(n>200)%>%
+  graph_from_data_frame()
+
+set.seed(2020)
+arrow_g<-grid::arrow(type = "closed", length = unit(.15, "inches"))
+ggraph(graph1, layout="fr")+
+  geom_edge_link(aes(edge_alpha=n),
+                 arrow=arrow_g, end_cap=circle(0.1,'inches')) +
+  geom_node_point(color = "olivedrab3", size=5) +
+  geom_node_text(aes(label = name))+
+  labs(title="Negative Network for Sentiments")+
+  theme_void()
+```
+
+### So, what kind of negative effect of these words are preceded by "not words" on my previous sentiment analysis? 
+
+I compared the sentimental words in all lyrics and the ones that appear after negating words. Here is a histogram to show the amount.
+
+```{r,echo=FALSE, message=FALSE, warning=FALSE}
+# compare total and after filter not words
+a1<-tidy_lyrics %>%
+  inner_join(get_sentiments("bing"))%>%
+  group_by(sentiment) %>%
+  summarise(total = n()) %>%
+  ungroup() %>%
+  mutate(sentiment = reorder(sentiment, total))
+
+a2<-negative_words_senti%>%
+  group_by(sentiment)%>%
+  summarise(not_senti=n())%>%
+  ungroup() %>%
+  mutate(sentiment = reorder(sentiment, not_senti))
+
+full_join(a2,a1)%>%
+  pivot_longer(-sentiment,names_to = "count",values_to = "n")%>%
+  ggplot(aes(sentiment, n,fill=sentiment))+
+  geom_col()+
+  scale_fill_brewer(palette= "Accent")+
+  facet_wrap(~count)
+```
+
+Judging from this figure, negating words are insignificant to the overall proportion and will not constitute a large reverse effect. Therefore, it will not have any major impact on the previous sentiment analysis.
+
+# Summary
+
+Lyrics have always been an important tool for humans to express emotions and ideas. Different musicians choose different themes to express diverse emotions and themes of life. In an increasingly formative contemporary society, people need more than just elegance, tradition, and a single emotional world, so more lyrics can hit people's inner world directly. For example, in the development of hip-hop, on the surface, it seems to be a genre of anti-traditional culture. However, with the expression of multiple emotions, musicians have inspired people to feel their deeper and more intense emotions. So it successfully developed its system. All in all, lyrics and sentiments are always inseparable.
+
+# Reference
+#### Bigram Negating words: https://www.tidytextmining.com/ngrams.html
+
