@@ -50,8 +50,8 @@ We separate sentiment into two categories, which are positive sentiment and nega
 I want to show the most recurring positive and negative words in lyrics among ten genres of songs. From the comparison word cloud shown below, the first plot is the top 200 positive word cloud among ten genres of songs. We can see that "love" is the most recurring positive words in all kinds of genres. At the same time, we can see that there are relatively few positive words in country, pop, and rock songs.
 
 ```{r,echo=FALSE, message=FALSE, warning=FALSE}
-load("/Users/zhaoziqin/Desktop/Spring2020-Project1-Ziqinzhao/output/processed_lyrics.RData")
-artists <- read_csv("~/Desktop/Spring2020-Project1-Ziqinzhao/data/artists.csv")
+load("../output/processed_lyrics.RData")
+artists <- read_csv("../data/artists.csv")
 
 tidy_lyrics<-dt_lyrics%>%
   unnest_tokens(word, stemmedwords) 
